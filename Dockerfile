@@ -1,15 +1,10 @@
 FROM adaptris/interlok:snapshot-alpine
 
 EXPOSE 8080
+EXPOSE 5555
 
-WORKDIR /opt/interlok
-ADD ant /opt/interlok/ant
+RUN rm -rf /opt/interlok/lib/adp-*.jar
+
+ADD lib /opt/interlok/lib
+ADD webapps /opt/interlok/webapps
 ADD config /opt/interlok/config
-
-RUN cd ant && \
-    ant -emacs deploy && \
-    rm -rf /root/.ivy2/cache/com.adaptris.ui && \
-    rm -rf /opt/interlok/ant 
-
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
