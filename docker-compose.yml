@@ -4,21 +4,16 @@ services:
     image: microsoft/mssql-server-linux:latest
     container_name: mssql
     hostname: mssql.local
-    environment:     
+    environment:
       ACCEPT_EULA: Y
       SA_PASSWORD: MyStr0ngPassw0rd!
     ports:
       - '1433:1433'
 
   interlok:
-    build:
-       context: .
-       dockerfile: Dockerfile
+    image: adaptris-labs/interlok-mssql:latest
     container_name: interlok
     hostname: interlok.local
-    # If you're going to mount; then ./config has to contain everything, e.g. log4j2.xml / jetty.xml / webdefault.xml
-    # volumes:
-    #   - ./config:/opt/interlok/config
     environment:
       JVM_ARGS: -Xmx1G
       JAVA_OPTS: -Dinterlok.db.url=jdbc:sqlserver://mssql:1433 -Dinterlok.db.user=sa -Dinterlok.db.password=MyStr0ngPassw0rd!

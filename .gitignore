@@ -1,4 +1,6 @@
-.env
-config/jetty.xml
-config/log4j2.xml
-config/webdefault.xml
+# Add any directories, files, or patterns you don't want to be tracked by version control
+gradle.properties
+build
+license.properties.*
+.gradle
+

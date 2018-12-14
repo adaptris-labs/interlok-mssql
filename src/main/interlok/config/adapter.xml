@@ -10,6 +10,11 @@
         <username>${local_db_username}</username>
         <password>${local_db_password}</password>
         <connect-url>${local_db_connect_url}</connect-url>
+        <connection-attempts>10</connection-attempts>
+        <connection-retry-interval>
+          <unit>SECONDS</unit>
+          <interval>10</interval>
+        </connection-retry-interval>
       </jdbc-pooled-connection>
       <jetty-embedded-connection>
         <unique-id>jetty-connection</unique-id>

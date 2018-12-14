@@ -1,0 +1,156 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+import org.apache.tools.ant.filters.*
+plugins {
+  id "distribution"
+  id "com.palantir.docker" version "0.20.1"
+  id 'com.palantir.docker-compose' version "0.20.1"
+}
+
+ext {
+  interlokCoreVersion = project.hasProperty('interlokCoreVersion') ? project.getProperty('interlokCoreVersion') : '3.8-SNAPSHOT'
+  releaseVersion = project.hasProperty('releaseVersion') ? project.getProperty('releaseVersion') : 'latest'
+  nexusBaseUrl = project.hasProperty('nexusBaseUrl') ? project.getProperty('nexusBaseUrl') : 'https://development.adaptris.net/nexus'
+  mavenPublishUrl = project.hasProperty('mavenPublishUrl') ? project.getProperty('mavenPublishUrl') : nexusBaseUrl + '/content/repositories/snapshots'
+  javadocsBaseUrl = nexusBaseUrl + "/content/sites/javadocs/com/adaptris"
+  repoUsername = project.hasProperty('repoUsername') ? project.getProperty('repoUsername') : 'unknown'
+  repoPassword = project.hasProperty('repoPassword') ? project.getProperty('repoPassword') : 'unknown'
+  defaultNexusRepo = project.hasProperty('defaultNexusRepo') ? project.getProperty('defaultNexusRepo') : 'https://repo1.maven.org/maven2/'
+  dockerGroup = project.hasProperty('dockerGroup') ? project.getProperty('dockerGroup') : "adaptris-labs"
+  forceDockerTemplate=project.hasProperty("dockerBuild") ? project.getProperty("dockerBuild") : "true"
+  adapterSourceConfig = "${projectDir}/src/main/interlok/config"
+  adapterTmpConfigDirectory = "${buildDir}/tmp/config-resolve"
+  log4j2Version='2.9.1'
+  slf4jVersion='1.7.25'
+}
+
+distTar.enabled=false
+distZip.enabled=true
+
+repositories {
+  mavenCentral()
+  maven { url "$defaultNexusRepo" }
+  maven {
+      credentials {
+        username repoUsername
+        password repoPassword
+      }
+      url "$nexusBaseUrl/content/groups/private"
+    }
+  maven { url "$nexusBaseUrl/content/groups/public" }
+  maven { url "$nexusBaseUrl/content/repositories/snapshots" }
+  maven { url "$nexusBaseUrl/content/repositories/releases" }
+}
+
+ext.hostname = { ->
+  if (forceDockerTemplate.equalsIgnoreCase("true")) {
+    return "docker"
+  }
+  if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+    return System.getenv("COMPUTERNAME")
+  }
+  return System.getenv("HOSTNAME")
+}
+
+def overwriteWithLocal(file, dir){
+  def localFile = "${dir}/${file}." + hostname()
+  if(new File(localFile).exists()){
+    ant.copy(file: localFile, tofile: "${dir}/${file}", overwrite: 'true', verbose: 'true')
+  }
+  delete fileTree(dir) { include "${file}.*" }
+}
+
+task localizeConfig(type: Copy) {
+  from "${adapterSourceConfig}"
+  into "${adapterTmpConfigDirectory}"
+  doLast {
+    overwriteWithLocal("log4j2.xml", "${adapterTmpConfigDirectory}")
+    overwriteWithLocal("license.properties", "${adapterTmpConfigDirectory}")
+  }
+}
+
+configurations {
+  war{}
+  interlokRuntime{}
+  all*.exclude group: 'c3p0'
+  all*.exclude group: 'commons-logging'
+  all*.exclude group: 'javamail'
+  all*.exclude group: 'javax.mail', module: 'mail'
+  all*.exclude group: 'org.glassfish.hk2.external'
+  all*.exclude group: 'xalan', module: 'xalan'
+  all*.exclude group: 'net.sf.saxon', module: 'saxon'
+  all*.exclude group: 'org.codehaus.woodstox'
+  all*.exclude group: 'com.fasterxml.woodstox'
+  all*.exclude group: 'org.eclipse.jetty.orbit', module: 'javax.mail.glassfish'
+}
+
+configurations.all {
+  resolutionStrategy.cacheChangingModulesFor 0, "seconds"
+}
+
+dependencies {
+
+  interlokRuntime ("com.adaptris:interlok-core:$interlokCoreVersion") { changing= true}
+  interlokRuntime ("com.adaptris:interlok-common:$interlokCoreVersion") { changing= true}
+  interlokRuntime ("com.adaptris:interlok-varsub:$interlokCoreVersion") { changing=true }
+  interlokRuntime ("com.adaptris:interlok-boot:$interlokCoreVersion") { changing=true }
+  interlokRuntime ("com.adaptris:interlok-xinclude:$interlokCoreVersion") { changing=true }
+  interlokRuntime ("com.adaptris:interlok-logging:$interlokCoreVersion") { changing=true }
+  interlokRuntime ("com.adaptris:interlok-json:$interlokCoreVersion") { changing=true }
+  interlokRuntime ("com.adaptris:interlok-apache-http:$interlokCoreVersion") { changing=true }
+  interlokRuntime ("com.microsoft.sqlserver:mssql-jdbc:6.2.1.jre8") { changing=true }
+
+  interlokRuntime ("org.apache.derby:derby:10.14.2.0")
+  interlokRuntime ("mysql:mysql-connector-java:5.1.47")
+  interlokRuntime ("org.slf4j:slf4j-api:$slf4jVersion")
+  interlokRuntime ("org.slf4j:jcl-over-slf4j:$slf4jVersion")
+  interlokRuntime ("org.slf4j:jul-to-slf4j:$slf4jVersion")
+  interlokRuntime ("org.apache.logging.log4j:log4j-core:$log4j2Version")
+  interlokRuntime ("org.apache.logging.log4j:log4j-1.2-api:$log4j2Version")
+  interlokRuntime ("org.apache.logging.log4j:log4j-api:$log4j2Version")
+  interlokRuntime ("org.apache.logging.log4j:log4j-slf4j-impl:$log4j2Version")
+
+  war ("com.adaptris.ui:interlok:$interlokCoreVersion@war") {changing=true}
+}
+
+distZip {
+  archiveName="${project.name}.zip"
+}
+
+
+distributions {
+  main {
+    contents {
+      from {
+        "src/main/interlok"
+      }
+      into('lib') {
+        from(project.configurations.interlokRuntime)
+      }
+      into('webapps') {
+        from(project.configurations.war)
+      }
+      // ovewrite the config files with custom ones.
+      into('config') {
+        from(localizeConfig)
+      }
+      // Exclude the localized property files
+      exclude "**/*.properties.*"
+      exclude "config/variables.properties"
+      exclude "**/*.xml.*"
+      rename '(.*)-[0-9]+\\..*.jar', '$1.jar'
+      rename '(.*)-[0-9]+\\..*.war', '$1.war'
+      duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+  }
+}
+
+docker {
+  name dockerGroup + "/" + rootProject.name
+  tags releaseVersion
+  pull true
+  files tasks.installDist.outputs
+}
+
+dockerCompose {
+  dockerComposeFile "docker-compose.yml"
+}
