@@ -1,55 +1,53 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <adapter>
   <unique-id>${adapter.unique.id}</unique-id>
+  <start-up-event-imp>com.adaptris.core.event.StandardAdapterStartUpEvent</start-up-event-imp>
+  <heartbeat-event-imp>com.adaptris.core.HeartbeatEvent</heartbeat-event-imp>
   <shared-components>
     <connections>
       <jdbc-pooled-connection>
         <unique-id>local-db</unique-id>
-        <test-statement>SELECT HOST_NAME();</test-statement>
-        <driver-imp>${local_db_driver}</driver-imp>
-        <username>${local_db_username}</username>
-        <password>${local_db_password}</password>
-        <connect-url>${local_db_connect_url}</connect-url>
         <connection-attempts>10</connection-attempts>
         <connection-retry-interval>
           <unit>SECONDS</unit>
           <interval>10</interval>
         </connection-retry-interval>
+        <test-statement>SELECT HOST_NAME();</test-statement>
+        <driver-imp>${local_db_driver}</driver-imp>
+        <username>${local_db_username}</username>
+        <password>${local_db_password}</password>
+        <connect-url>${local_db_connect_url}</connect-url>
       </jdbc-pooled-connection>
       <jetty-embedded-connection>
         <unique-id>jetty-connection</unique-id>
       </jetty-embedded-connection>
     </connections>
+    <services/>
   </shared-components>
+  <event-handler class="default-event-handler">
+    <unique-id>default-event-handler</unique-id>
+    <connection class="null-connection">
+      <unique-id>null-connection</unique-id>
+    </connection>
+    <producer class="null-message-producer">
+      <unique-id>null-message-producer</unique-id>
+    </producer>
+  </event-handler>
+  <message-error-handler class="null-processing-exception-handler">
+    <unique-id>null-processing-exception-handler</unique-id>
+  </message-error-handler>
+  <failed-message-retrier class="no-retries">
+    <unique-id>no-retries</unique-id>
+  </failed-message-retrier>
   <channel-list>
     <channel>
-      <unique-id>MS-SQL</unique-id>
-      <message-error-handler class="standard-processing-exception-handler">
-        <processing-exception-service class="service-list">
-          <services>
-            <exception-report-service>
-              <exception-serializer class="exception-as-json-with-stacktrace"/>
-            </exception-report-service>
-            <standalone-producer>
-              <producer class="jetty-standard-response-producer">
-                <status-provider class="http-configured-status">
-                  <status>INTERNAL_ERROR_500</status>
-                </status-provider>
-                <content-type-provider class="http-configured-content-type-provider">
-                  <mime-type>application/json</mime-type>
-                </content-type-provider>
-                <send-payload>true</send-payload>
-              </producer>
-            </standalone-producer>
-          </services>
-        </processing-exception-service>
-      </message-error-handler>
       <consume-connection class="shared-connection">
         <lookup-name>jetty-connection</lookup-name>
       </consume-connection>
+      <produce-connection class="null-connection">
+        <unique-id>null-connection</unique-id>
+      </produce-connection>
       <workflow-list>
         <standard-workflow>
-          <unique-id>sysinfo</unique-id>
           <consumer class="jetty-message-consumer">
             <unique-id>/mssql/connect-info</unique-id>
             <destination class="configured-consume-destination">
@@ -59,11 +57,14 @@
             <header-handler class="jetty-http-ignore-headers"/>
           </consumer>
           <service-collection class="service-list">
+            <unique-id>service-list</unique-id>
             <services>
               <jdbc-data-query-service>
+                <unique-id>get-connection-information</unique-id>
                 <connection class="shared-connection">
                   <lookup-name>local-db</lookup-name>
                 </connection>
+                <parameter-applicator class="sequential-parameter-applicator"/>
                 <statement-creator class="jdbc-configured-sql-statement">
                   <statement>SELECT @@CONNECTIONS as connections,
                             @@CPU_BUSY as cpu_busy,
@@ -71,11 +72,17 @@
                             FORMAT(GETDATE(), 'd', 'en-gb') as date;
                   </statement>
                 </statement-creator>
-                <result-set-translator class="jdbc-json-first-resultset-output"/>
+                <result-set-translator class="jdbc-json-first-resultset-output">
+                  <column-name-style>NoStyle</column-name-style>
+                </result-set-translator>
               </jdbc-data-query-service>
               <standalone-producer>
-                <unique-id>Send Response</unique-id>
+                <unique-id>send-response</unique-id>
+                <connection class="null-connection">
+                  <unique-id>null-connection</unique-id>
+                </connection>
                 <producer class="jetty-standard-response-producer">
+                  <unique-id>jetty-standard-response-producer</unique-id>
                   <status-provider class="http-metadata-status">
                     <code-key>ResponseCode</code-key>
                     <default-status>OK_200</default-status>
@@ -89,12 +96,47 @@
               </standalone-producer>
             </services>
           </service-collection>
+          <producer class="null-message-producer">
+            <unique-id>null-message-producer</unique-id>
+          </producer>
+          <produce-exception-handler class="null-produce-exception-handler"/>
+          <unique-id>sysinfo</unique-id>
         </standard-workflow>
       </workflow-list>
+      <message-error-handler class="standard-processing-exception-handler">
+        <unique-id>jett-exception-handler</unique-id>
+        <processing-exception-service class="service-list">
+          <unique-id>service-list</unique-id>
+          <services>
+            <exception-report-service>
+              <unique-id>exception-report-service</unique-id>
+              <exception-serializer class="exception-as-json-with-stacktrace"/>
+            </exception-report-service>
+            <standalone-producer>
+              <unique-id>send-response</unique-id>
+              <connection class="null-connection">
+                <unique-id>null-connection</unique-id>
+              </connection>
+              <producer class="jetty-standard-response-producer">
+                <unique-id>jetty-standard-response-producer</unique-id>
+                <status-provider class="http-configured-status">
+                  <status>INTERNAL_ERROR_500</status>
+                </status-provider>
+                <response-header-provider class="jetty-no-response-headers"/>
+                <content-type-provider class="http-configured-content-type-provider">
+                  <mime-type>application/json</mime-type>
+                </content-type-provider>
+                <send-payload>true</send-payload>
+              </producer>
+            </standalone-producer>
+          </services>
+        </processing-exception-service>
+      </message-error-handler>
+      <unique-id>MS-SQL</unique-id>
     </channel>
   </channel-list>
   <message-error-digester class="standard-message-error-digester">
-    <digest-max-size>100</digest-max-size>
     <unique-id>ErrorDigest</unique-id>
+    <digest-max-size>100</digest-max-size>
   </message-error-digester>
 </adapter>
