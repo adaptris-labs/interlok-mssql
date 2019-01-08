@@ -1,0 +1,15 @@
+{
+  "variableSets" : {
+    "default" : { }
+  },
+  "variableXpaths" : {
+    "/adapter/shared-components/connections/jdbc-pooled-connection[unique-id=\"local-db\"]/connect-url" : "${local_db_connect_url}",
+    "/adapter/shared-components/connections/jdbc-pooled-connection[unique-id=\"local-db\"]/driver-imp" : "${local_db_driver}",
+    "/adapter/shared-components/connections/jdbc-pooled-connection[unique-id=\"local-db\"]/username" : "${local_db_username}",
+    "/adapter/unique-id" : "${adapter.unique.id}",
+    "/adapter/shared-components/connections/jdbc-pooled-connection[unique-id=\"local-db\"]/password" : "${local_db_password}"
+  },
+  "uidInXincludeCompntListFileName" : false,
+  "xincludeXpaths" : { },
+  "structured" : true
+}
